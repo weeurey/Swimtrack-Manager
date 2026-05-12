@@ -69,6 +69,31 @@ jobs:
           Copy-Item -Path (Join-Path $bin.DirectoryName "ffprobe.exe") -Destination ffmpeg_bundle/
           "FFMPEG_BUNDLE_DIR=$((Get-Item ffmpeg_bundle).FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Compress FFmpeg with UPX (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y upx-ucl
+          ls -lh ffmpeg_bundle/
+          upx --best --lzma ffmpeg_bundle/ffmpeg ffmpeg_bundle/ffprobe || true
+          ls -lh ffmpeg_bundle/
+
+      - name: Compress FFmpeg with UPX (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $upxVersion = "4.2.4"
+          $upxUrl = "https://github.com/upx/upx/releases/download/v$upxVersion/upx-$upxVersion-win64.zip"
+          Invoke-WebRequest -Uri $upxUrl -OutFile upx.zip
+          Expand-Archive -Path upx.zip -DestinationPath upx_extracted
+          $upxExe = Get-ChildItem -Path upx_extracted -Recurse -Filter "upx.exe" | Select-Object -First 1
+          Get-ChildItem ffmpeg_bundle | Format-Table Name, Length
+          & $upxExe.FullName --best --lzma ffmpeg_bundle/ffmpeg.exe ffmpeg_bundle/ffprobe.exe
+          if ($LASTEXITCODE -ne 0) { Write-Host "UPX returned $LASTEXITCODE (continuing)" }
+          Get-ChildItem ffmpeg_bundle | Format-Table Name, Length
+
       - name: Build with PyInstaller
         shell: bash
         run: |

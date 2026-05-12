@@ -44,15 +44,52 @@ The app is designed around devices like the Aztine waterproof bone-conduction he
 - Non-destructive workflow: source files are never modified in place.
 - Generated output defaults to MP3.
 
-## Important dependencies
+## Installation
 
-This is a source package, not a compiled installer. Install Python 3.10+ and then install the app dependencies. This version is compatible with Python 3.13 and no longer depends on `pydub`, avoiding the removed `audioop` module issue:
+### Pre-built releases (recommended)
+
+Download the latest release from the [Releases page](https://github.com/weeurey/Swimtrack-Manager/releases). No Python installation is required.
+
+**Windows**
+
+1. Download `SwimTrackManager-windows-x86_64.zip` and extract it anywhere.
+2. Run `SwimTrackManager.exe` inside the extracted folder.
+3. Install FFmpeg and ensure `ffmpeg.exe` and `ffprobe.exe` are on your PATH (see [Windows FFmpeg](#windows-ffmpeg) below).
+
+**Linux**
+
+1. Download `SwimTrackManager-linux-x86_64.tar.gz` and extract it:
+   ```bash
+   tar -xzf SwimTrackManager-linux-x86_64.tar.gz
+   cd SwimTrackManager-linux-x86_64
+   ./SwimTrackManager
+   ```
+2. Install FFmpeg (see [Linux FFmpeg](#linux-ffmpeg) below).
+3. For voice cues, install `espeak-ng` (see [Linux FFmpeg](#linux-ffmpeg) below). Speech is optional — beep-only cues work without it.
+
+### Running from source
+
+Install Python 3.10+ and then install the app dependencies. This version is compatible with Python 3.13 and no longer depends on `pydub`, avoiding the removed `audioop` module issue:
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-You also need FFmpeg and FFprobe installed and available on your PATH for audio conversion, duration detection and cue insertion.
+From the project folder:
+
+```bash
+python -m swimtrack_manager
+```
+
+or:
+
+```bash
+python run.py
+```
+
+## Important dependencies
+
+You need FFmpeg and FFprobe installed and available on your PATH for audio conversion, duration detection and cue insertion.
 
 ### Windows FFmpeg
 
@@ -73,20 +110,6 @@ sudo apt install espeak-ng
 ```
 
 Speech features are optional. Beep-only cue insertion works without speech support.
-
-## Running
-
-From the project folder:
-
-```bash
-python -m swimtrack_manager
-```
-
-or:
-
-```bash
-python run.py
-```
 
 ## Typical workflow
 

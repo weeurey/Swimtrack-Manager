@@ -590,6 +590,17 @@ class MainWindow(QMainWindow):
         self.prevent_mix_attenuation_check.setChecked(True)
         self.output_limiter_check = QCheckBox("Use limiter to prevent clipping after boosts")
         self.output_limiter_check.setChecked(True)
+        self.voice_ducking_check = QCheckBox("Reduce media volume while voice cues play")
+        self.voice_ducking_check.setChecked(False)
+        self.voice_ducking_spin = QSpinBox()
+        self.voice_ducking_spin.setRange(0, 100)
+        self.voice_ducking_spin.setSingleStep(5)
+        self.voice_ducking_spin.setSuffix(" %")
+        self.voice_ducking_spin.setValue(60)
+        self.voice_ducking_spin.setToolTip(
+            "Percentage to reduce the base track volume during voice intros, indicators and outros. "
+            "0% = no reduction, 100% = silence the track under the voice."
+        )
         note = QLabel(
             "Earlier builds used FFmpeg amix's default normalisation, which could make processed tracks quieter when cues were mixed in. "
             "This option disables that attenuation by default. Use Final output gain if your headphones still need a louder file."
@@ -599,6 +610,8 @@ class MainWindow(QMainWindow):
         form.addRow("Final output gain", self.final_volume_spin)
         form.addRow("Mix behaviour", self.prevent_mix_attenuation_check)
         form.addRow("Safety limiter", self.output_limiter_check)
+        form.addRow("Voice ducking", self.voice_ducking_check)
+        form.addRow("Ducking amount", self.voice_ducking_spin)
         form.addRow("Note", note)
         return tab
 
@@ -842,6 +855,8 @@ class MainWindow(QMainWindow):
             self.final_volume_spin,
             self.prevent_mix_attenuation_check,
             self.output_limiter_check,
+            self.voice_ducking_check,
+            self.voice_ducking_spin,
             self.voice_title_check,
             self.voice_track_check,
             self.voice_folder_check,
@@ -1395,6 +1410,8 @@ class MainWindow(QMainWindow):
         self.final_volume_spin.setValue(float(getattr(s, "final_volume_db", 0.0)))
         self.prevent_mix_attenuation_check.setChecked(bool(getattr(s, "prevent_mix_attenuation", True)))
         self.output_limiter_check.setChecked(bool(getattr(s, "output_limiter", True)))
+        self.voice_ducking_check.setChecked(bool(getattr(s, "voice_ducking_enabled", False)))
+        self.voice_ducking_spin.setValue(int(getattr(s, "voice_ducking_percent", 60)))
         self.beep_enabled_check.setChecked(s.beep_enabled)
         self.percentages_edit.setText(",".join(str(x) for x in s.beep_percentages))
         self.every_minutes_spin.setValue(s.beep_every_minutes)
@@ -1465,6 +1482,8 @@ class MainWindow(QMainWindow):
         s.final_volume_db = self.final_volume_spin.value()
         s.prevent_mix_attenuation = self.prevent_mix_attenuation_check.isChecked()
         s.output_limiter = self.output_limiter_check.isChecked()
+        s.voice_ducking_enabled = self.voice_ducking_check.isChecked()
+        s.voice_ducking_percent = int(self.voice_ducking_spin.value())
         s.beep_enabled = self.beep_enabled_check.isChecked()
         s.beep_percentages = self.parse_percentages(self.percentages_edit.text())
         s.beep_every_minutes = self.every_minutes_spin.value()
@@ -1688,7 +1707,8 @@ class MainWindow(QMainWindow):
                 f"{float(getattr(self.cue_settings, 'main_volume_db', 0.0)):+.1f} dB; "
                 f"final gain {float(getattr(self.cue_settings, 'final_volume_db', 0.0)):+.1f} dB; "
                 f"mix attenuation {'prevented' if getattr(self.cue_settings, 'prevent_mix_attenuation', True) else 'allowed'}; "
-                f"limiter {'on' if getattr(self.cue_settings, 'output_limiter', True) else 'off'}."
+                f"limiter {'on' if getattr(self.cue_settings, 'output_limiter', True) else 'off'}; "
+                f"voice ducking {'on (' + str(int(getattr(self.cue_settings, 'voice_ducking_percent', 0))) + '%)' if getattr(self.cue_settings, 'voice_ducking_enabled', False) else 'off'}."
             )
         if self.cue_settings.enabled and not any(t.audio_processing for t in active):
             lines.append("")

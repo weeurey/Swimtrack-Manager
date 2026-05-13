@@ -146,7 +146,7 @@ def process_track(
                 progress(f"Prepending intro speech to {track.source_path.name}")
             _concat_intro_and_source(intro_path, track.source_path, base_path, progress=progress)
 
-        cue_inputs: list[tuple[Path, int, str]] = []
+        cue_inputs: list[tuple[Path, int, str, bool]] = []
 
         if cue_enabled and settings.beep_enabled and original_ms > 0:
             beep_path = tmp / "beep.wav"
@@ -155,7 +155,7 @@ def process_track(
                 label = f"beep at {format_time(position_ms)}"
                 if progress:
                     progress(f"Queueing {label} in {track.title}")
-                cue_inputs.append((beep_path, intro_offset_ms + position_ms, label))
+                cue_inputs.append((beep_path, intro_offset_ms + position_ms, label, False))
 
         if cue_enabled and settings.voice_progress and original_ms > 0:
             voice_markers = voice_indicator_markers(original_ms, settings)
@@ -165,7 +165,7 @@ def process_track(
                     if progress:
                         progress(f"Generating voice indicator at {format_time(position_ms)}: {text}")
                     synthesize_speech(text, speech_path, settings)
-                    cue_inputs.append((speech_path, intro_offset_ms + position_ms, text))
+                    cue_inputs.append((speech_path, intro_offset_ms + position_ms, text, True))
                 except Exception as exc:
                     if progress:
                         progress(f"Speech indicator failed at {format_time(position_ms)}: {exc}")
@@ -179,7 +179,7 @@ def process_track(
                 if progress:
                     progress(f"Generating custom outro near end: {text}")
                 synthesize_speech(text, speech_path, settings)
-                cue_inputs.append((speech_path, intro_offset_ms + position_ms, text))
+                cue_inputs.append((speech_path, intro_offset_ms + position_ms, text, True))
             except Exception as exc:
                 if progress:
                     progress(f"Custom outro speech failed: {exc}")
@@ -324,30 +324,59 @@ def _make_beep_file(
 
 def _mix_cues_into_base(
     base_path: Path,
-    cue_inputs: list[tuple[Path, int, str]],
+    cue_inputs: list[tuple[Path, int, str, bool]],
     destination: Path,
     settings: CueSettings,
     progress: Callable[[str], None] | None = None,
 ) -> None:
     inputs: list[str] = ["-i", str(base_path)]
-    for cue_path, _delay_ms, _label in cue_inputs:
+    for entry in cue_inputs:
+        cue_path = entry[0]
         inputs.extend(["-i", str(cue_path)])
 
     main_gain = float(getattr(settings, "main_volume_db", 0.0) or 0.0)
     final_gain = float(getattr(settings, "final_volume_db", 0.0) or 0.0)
     prevent_attenuation = bool(getattr(settings, "prevent_mix_attenuation", True))
     limiter_enabled = bool(getattr(settings, "output_limiter", True))
+    ducking_enabled = bool(getattr(settings, "voice_ducking_enabled", False))
+    ducking_percent = max(0, min(100, int(getattr(settings, "voice_ducking_percent", 0) or 0)))
 
-    filters = [f"[0:a]aformat={FFMPEG_AUDIO_FORMAT},volume={main_gain:.2f}dB[base]"]
+    voice_intervals: list[tuple[float, float]] = []
+    if ducking_enabled and ducking_percent > 0:
+        for cue_path, delay_ms, _label, is_voice in cue_inputs:
+            if not is_voice:
+                continue
+            cue_dur = duration_seconds(cue_path) or 0.0
+            if cue_dur <= 0:
+                continue
+            start_s = max(0, int(delay_ms)) / 1000.0
+            voice_intervals.append((start_s, start_s + cue_dur))
+
+    base_filter = f"[0:a]aformat={FFMPEG_AUDIO_FORMAT},volume={main_gain:.2f}dB"
+    if voice_intervals:
+        duck_factor = max(0.0, (100 - ducking_percent) / 100.0)
+        for start_s, end_s in voice_intervals:
+            base_filter += (
+                f",volume=enable='between(t,{start_s:.3f},{end_s:.3f})'"
+                f":volume={duck_factor:.3f}"
+            )
+        if progress:
+            progress(
+                f"Ducking base track by {ducking_percent}% during "
+                f"{len(voice_intervals)} voice cue interval(s) (factor {duck_factor:.2f})."
+            )
+    filters = [base_filter + "[base]"]
     mix_labels = ["[base]"]
     if progress:
         progress(
             "Mixing volume settings: "
             f"main gain {main_gain:+.1f} dB, final gain {final_gain:+.1f} dB, "
             f"amix normalize={'off' if prevent_attenuation else 'on'}, "
-            f"limiter={'on' if limiter_enabled else 'off'}."
+            f"limiter={'on' if limiter_enabled else 'off'}, "
+            f"ducking={'on' if ducking_enabled else 'off'}"
+            f"{f' ({ducking_percent}%)' if ducking_enabled else ''}."
         )
-    for input_index, (_cue_path, delay_ms, label_text) in enumerate(cue_inputs, start=1):
+    for input_index, (_cue_path, delay_ms, label_text, _is_voice) in enumerate(cue_inputs, start=1):
         delay = max(0, int(delay_ms))
         label = f"cue{input_index}"
         if progress:

@@ -64,6 +64,10 @@ class CueSettings:
     prevent_mix_attenuation: bool = True
     output_limiter: bool = True
 
+    # Ducking: reduce the base track volume while a voice cue is playing.
+    voice_ducking_enabled: bool = False
+    voice_ducking_percent: int = 60  # percent reduction of the base track during voice cues (0-100)
+
     # Beep indicators
     beep_enabled: bool = False
     beep_frequency_hz: int = 880
